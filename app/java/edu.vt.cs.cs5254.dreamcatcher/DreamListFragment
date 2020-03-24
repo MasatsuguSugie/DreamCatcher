@@ -1,0 +1,90 @@
+package edu.vt.cs.cs5254.dreamcatcher
+
+import android.content.Context
+import android.os.Bundle
+import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import edu.vt.cs.cs5254.dreamcatcher.database.Dream
+import java.util.*
+
+private const val TAG = "DreamListFragment"
+
+class DreamListFragment : Fragment() {
+
+    /**
+     * Required interface for hosting activities
+     *//**
+     * ALL hosting activities must
+     * implement this interface
+     */
+    interface Callbacks {
+        fun onDreamSelected(dreamId: UUID)
+    }
+
+    private var callbacks: Callbacks? = null
+
+    //recycler-view/adaptor fields
+    private lateinit var dreamRecyclerView: RecyclerView
+
+    // controller fields
+    private var adapter: DreamAdapter? = DreamAdapter(emptyList(), callbacks)
+
+    //view-model
+    private val dreamListViewModel by lazy {
+        val factory = DreamListViewModelFactory()
+        ViewModelProvider(this@DreamListFragment, factory).get(DreamListViewModel::class.java)
+    }
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        callbacks = context as Callbacks?
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        val view = inflater.inflate(R.layout.fragment_dream_list, container, false)
+
+        dreamRecyclerView = view.findViewById(R.id.dream_recycler_view) as RecyclerView
+        dreamRecyclerView.layoutManager = LinearLayoutManager(context)
+        dreamRecyclerView.adapter = adapter
+        return view
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        dreamListViewModel.dreamListLiveData.observe(
+            viewLifecycleOwner,
+            Observer { dreams ->
+                dreams?.let {
+                    Log.i(TAG, "Got dreams ${dreams.size}")
+                    updateUI(dreams)
+                }
+            })
+    }
+
+    override fun onDetach() {
+        super.onDetach()
+        callbacks = null
+    }
+
+    private fun updateUI(dreams: List<Dream>) {
+        adapter = DreamAdapter(dreams, callbacks)
+        dreamRecyclerView.adapter = adapter
+    }
+
+    companion object {
+        fun newInstance(): DreamListFragment {
+            return DreamListFragment()
+        }
+    }
+}
