@@ -2,10 +2,13 @@ package edu.vt.cs.cs5254.dreamcatcher
 
 import android.content.Context
 import android.os.Bundle
+import android.text.format.DateFormat
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
@@ -85,6 +88,66 @@ class DreamListFragment : Fragment() {
     companion object {
         fun newInstance(): DreamListFragment {
             return DreamListFragment()
+        }
+    }
+
+    private inner class DreamAdapter(var dreams: List<Dream>, val callbacks: Callbacks?): RecyclerView.Adapter<DreamHolder>() {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int):DreamHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            val view =
+                inflater.inflate(R.layout.list_item_dream, parent, false)
+            Log.d(TAG, "onCreateViewHolder")
+            return DreamHolder(view, callbacks)
+        }
+
+        override fun getItemCount() = dreams.size
+
+        override fun onBindViewHolder(holder: DreamHolder, position: Int) {
+            val dream = dreams[position]
+            holder.bind(dream)
+        }
+    }
+
+    inner class DreamHolder(view: View, val callbacks: Callbacks?) : RecyclerView.ViewHolder(view), View.OnClickListener {
+
+        //model fields
+        private lateinit var dream: Dream
+
+        //view fields
+        private val titleTextView: TextView = itemView.findViewById(R.id.dream_title)
+        private val dateTextView: TextView = itemView.findViewById(R.id.dream_date)
+        private val dreamImageView: ImageView = itemView.findViewById(R.id.dream_icon)
+
+        // date
+        private val dateFormat = DateFormat.getMediumDateFormat(this@DreamHolder.itemView.context)
+
+        init {
+            itemView.setOnClickListener(this)
+        }
+
+        fun bind(dream: Dream) {
+            this.dream = dream
+            titleTextView.text = this.dream.description
+            dateTextView.text = dateFormat.format(this.dream.dateRevealed)
+            when {
+                dream.isDeferred -> {
+                    dreamImageView.setImageResource(R.drawable.dream_deferred_icon)
+                    dreamImageView.tag = R.drawable.dream_deferred_icon
+                }
+                dream.isRealized -> {
+                    dreamImageView.setImageResource(R.drawable.dream_realized_icon)
+                    dreamImageView.tag = R.drawable.dream_realized_icon
+                }
+                else -> {
+                    dreamImageView.setImageResource(0)
+                    dreamImageView.tag = 0
+                }
+            }
+        }
+
+        override fun onClick(v: View?) {
+            callbacks?.onDreamSelected(dream.id)
         }
     }
 }
