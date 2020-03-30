@@ -1,7 +1,9 @@
 package edu.vt.cs.cs5254.dreamcatcher
 
-import android.content.res.ColorStateList
+import android.graphics.BlendMode
+import android.graphics.BlendModeColorFilter
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -13,6 +15,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import androidx.annotation.RequiresApi
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
@@ -22,12 +25,7 @@ import java.util.*
 private const val TAG = "DreamFragment"
 private const val ARG_DREAM_ID = "dream_id"
 
-class DreamFragment : Fragment() {
-
-    private val defaultButtonColor = "#f5B041"
-    private val revealedButtonColor = "#2874A6"
-    private val realizedButtonColor = "#27AE60"
-    private val deferredButtonColor = "#CB4335"
+class DreamDetailFragment : Fragment() {
 
     // model fields
     private lateinit var dream: Dream
@@ -49,7 +47,7 @@ class DreamFragment : Fragment() {
     // view-model
     private val dreamDetailViewModel: DreamDetailViewModel by lazy {
         val factory = DreamDetailViewModelFactory()
-        ViewModelProvider(this@DreamFragment, factory).get(DreamDetailViewModel::class.java)
+        ViewModelProvider(this@DreamDetailFragment, factory).get(DreamDetailViewModel::class.java)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +81,7 @@ class DreamFragment : Fragment() {
         return view
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         Log.d(
@@ -100,6 +99,7 @@ class DreamFragment : Fragment() {
             })
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onStart() {
         super.onStart()
         val titleWatcher = object : TextWatcher {
@@ -135,6 +135,7 @@ class DreamFragment : Fragment() {
         dreamDetailViewModel.saveDream(DreamWithEntries(dream, dreamEntries))
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun updateUI() {
         titleField.setText(dream.description)
 
@@ -150,28 +151,7 @@ class DreamFragment : Fragment() {
 
     }
 
-    companion object {
-        fun newInstance(dreamId: UUID): DreamFragment {
-            val args = Bundle().apply {
-                putSerializable(ARG_DREAM_ID, dreamId)
-            }
-            return DreamFragment().apply {
-                arguments = args
-            }
-        }
-//        const val TAG = "DreamFragment"
-//
-//        private const val REVEALED_COLOR = -0xff8946
-//        private const val REALIZED_COLOR = -0xff7100
-//        private const val DEFERRED_COLOR = -0x4ae900
-//        private const val COMMENT_COLOR = -0x2b87
-//
-//        private val REVEALED_FILTER = BlendModeColorFilter(REVEALED_COLOR, BlendMode.MULTIPLY)
-//        private val DEFERRED_FILTER = BlendModeColorFilter(DEFERRED_COLOR, BlendMode.MULTIPLY)
-//        private val REALIZED_FILTER = BlendModeColorFilter(REALIZED_COLOR, BlendMode.MULTIPLY)
-//        private val COMMENT_FILTER = BlendModeColorFilter(COMMENT_COLOR, BlendMode.MULTIPLY)
-    }
-
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun updateEntryButtons() {
         dreamButton0.visibility = View.GONE
         dreamButton1.visibility = View.GONE
@@ -187,32 +167,21 @@ class DreamFragment : Fragment() {
             button.visibility = View.VISIBLE
             if (dreamEntries.kind == DreamEntryKind.COMMENT) {
                 button.text = "${dreamEntries.comment} (${commentDate})"
-                button.setTextColor(Color.BLACK)
-                setButtonColor(button, defaultButtonColor)
+                setCommentStyle(button)
             }
             if (dreamEntries.kind == DreamEntryKind.REVEALED) {
                 button.text = dreamEntries.comment
-                button.setTextColor(Color.WHITE)
-                setButtonColor(button, revealedButtonColor)
+                setRevealedStyle(button)
             }
             if (dreamEntries.kind == DreamEntryKind.DEFERRED) {
                 button.text = dreamEntries.comment
-                button.setTextColor(Color.WHITE)
-                setButtonColor(button, deferredButtonColor)
+                setDeferredStyle(button)
             }
             if (dreamEntries.kind == DreamEntryKind.REALIZED) {
                 button.text = dreamEntries.comment
-                button.setTextColor(Color.WHITE)
-                setButtonColor(button, realizedButtonColor)
+                setRealizedStyle(button)
             }
         }
-    }
-
-
-    private fun setButtonColor(button: Button, colorString: String) {
-        button.backgroundTintList =
-            ColorStateList.valueOf(Color.parseColor(colorString))
-        button.alpha = 1f
     }
 
     private fun onRealizedClicked(isChecked: Boolean) {
@@ -235,7 +204,6 @@ class DreamFragment : Fragment() {
         }
     }
 
-    // update dream and dreamEntries model fields...
     private fun onDeferredClicked(isChecked: Boolean) {
         dream.isDeferred = isChecked
         val deferredEntry = dreamEntries.filter { it.kind == DreamEntryKind.DEFERRED }
@@ -255,41 +223,59 @@ class DreamFragment : Fragment() {
             }
         }
     }
+
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun setRevealedStyle(button: Button) {
+        button.background.colorFilter = REVEALED_FILTER
+        button.setTextColor(Color.WHITE)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun setDeferredStyle(button: Button) {
+        button.background.colorFilter = DEFERRED_FILTER
+        button.setTextColor(Color.WHITE)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun setRealizedStyle(button: Button) {
+        button.background.colorFilter = REALIZED_FILTER
+        button.setTextColor(Color.WHITE)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun setCommentStyle(button: Button) {
+        button.background.colorFilter = COMMENT_FILTER
+        button.setTextColor(Color.BLACK)
+    }
+
+    companion object {
+        fun newInstance(dreamId: UUID): DreamDetailFragment {
+            val args = Bundle().apply {
+                putSerializable(ARG_DREAM_ID, dreamId)
+            }
+            return DreamDetailFragment().apply {
+                arguments = args
+            }
+        }
+
+        //const val TAG = "DreamFragment"
+
+        private const val REVEALED_COLOR = -0xff8946
+        private const val REALIZED_COLOR = -0xff7100
+        private const val DEFERRED_COLOR = -0x4ae900
+        private const val COMMENT_COLOR = -0x2b87
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        private val REVEALED_FILTER = BlendModeColorFilter(REVEALED_COLOR, BlendMode.MULTIPLY)
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        private val DEFERRED_FILTER = BlendModeColorFilter(DEFERRED_COLOR, BlendMode.MULTIPLY)
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        private val REALIZED_FILTER = BlendModeColorFilter(REALIZED_COLOR, BlendMode.MULTIPLY)
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        private val COMMENT_FILTER = BlendModeColorFilter(COMMENT_COLOR, BlendMode.MULTIPLY)
+    }
 }
-
-//    @RequiresApi(Build.VERSION_CODES.Q)
-//    private fun setRevealedStyle(button: Button) {
-//        button.background.colorFilter = REVEALED_FILTER
-//        button.setTextColor(Color.WHITE)
-//    }
-//
-//    @RequiresApi(Build.VERSION_CODES.Q)
-//    private fun setDeferredStyle(button: Button) {
-//        button.background.colorFilter = DEFERRED_FILTER
-//        button.setTextColor(Color.WHITE)
-//    }
-//
-//    @RequiresApi(Build.VERSION_CODES.Q)
-//    private fun setRealizedStyle(button: Button) {
-//        button.background.colorFilter = REALIZED_FILTER
-//        button.setTextColor(Color.WHITE)
-//    }
-//
-//    @RequiresApi(Build.VERSION_CODES.Q)
-//    private fun setCommentStyle(button: Button) {
-//        button.background.colorFilter = COMMENT_FILTER
-//        button.setTextColor(Color.BLACK)
-//    }
-
-//    companion object {
-//        const val TAG = "DreamFragment"
-//
-//        private const val REVEALED_COLOR = -0xff8946
-//        private const val REALIZED_COLOR = -0xff7100
-//        private const val DEFERRED_COLOR = -0x4ae900
-//        private const val COMMENT_COLOR = -0x2b87
-//
-//        private val REVEALED_FILTER = BlendModeColorFilter(REVEALED_COLOR, BlendMode.MULTIPLY)
-//        private val DEFERRED_FILTER = BlendModeColorFilter(DEFERRED_COLOR, BlendMode.MULTIPLY)
-//        private val REALIZED_FILTER = BlendModeColorFilter(REALIZED_COLOR, BlendMode.MULTIPLY)
-//        private val COMMENT_FILTER = BlendModeColorFilter(COMMENT_COLOR, BlendMode.MULTIPLY)
