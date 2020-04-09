@@ -4,8 +4,8 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Transformations
 import androidx.lifecycle.ViewModel
-import edu.vt.cs.cs5254.dreamcatcher.database.Dream
 import edu.vt.cs.cs5254.dreamcatcher.database.DreamWithEntries
+import java.io.File
 import java.util.*
 
 class DreamDetailViewModel() : ViewModel() {
@@ -24,6 +24,10 @@ class DreamDetailViewModel() : ViewModel() {
 
     fun saveDream(dreamWithEntries: DreamWithEntries) {
         dreamRepository.updateDreamWithEntries(dreamWithEntries)
+    }
+
+    fun getPhotoFile(dream: DreamWithEntries): File {
+        return dreamRepository.getPhotoFile(dream)
     }
 
 }
