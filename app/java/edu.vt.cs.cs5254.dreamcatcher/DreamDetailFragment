@@ -3,35 +3,45 @@ package edu.vt.cs.cs5254.dreamcatcher
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageView
 import androidx.annotation.RequiresApi
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import edu.vt.cs.cs5254.dreamcatcher.database.*
+import edu.vt.cs.cs5254.dreamcatcher.util.CameraUtil
+import java.io.File
 import java.util.*
 
-private const val TAG = "DreamFragment"
+private const val TAG = "DreamDetailFragment"
 private const val ARG_DREAM_ID = "dream_id"
+private const val REQUEST_ADD_COMMENT = 0
+private const val DIALOG_ADD_COMMENT = "DialogAddComment"
 
-class DreamDetailFragment : Fragment() {
+class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
 
-    // model fields
+    // ======================================================
+    // model fields, view fields, and view-model field
+    // ======================================================
+
     private lateinit var dream: Dream
     private lateinit var dreamEntries: List<DreamEntry>
+    private lateinit var photoFile: File
+    private lateinit var photoUri: Uri
 
-    // view fields
     private lateinit var titleField: EditText
     private lateinit var dreamButton0: Button
     private lateinit var dreamButton1: Button
@@ -42,16 +52,56 @@ class DreamDetailFragment : Fragment() {
     private lateinit var isRealizedCheckBox: CheckBox
     private lateinit var isDeferredCheckBox: CheckBox
 
-    private lateinit var dreamButtonList: List<Button>
+    private lateinit var entryButtons: List<Button>
+
+    private lateinit var addCommentButton: FloatingActionButton
+
+    private lateinit var photoView: ImageView
 
     // view-model
     private val dreamDetailViewModel: DreamDetailViewModel by lazy {
-        val factory = DreamDetailViewModelFactory()
-        ViewModelProvider(this@DreamDetailFragment, factory).get(DreamDetailViewModel::class.java)
+        ViewModelProvider(this@DreamDetailFragment).get(DreamDetailViewModel::class.java)
     }
+
+    // options menu methods
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        super.onCreateOptionsMenu(menu, inflater)
+        inflater.inflate(R.menu.fragment_dream_detail, menu)
+
+        val cameraAvailable = CameraUtil.isCameraAvailable(requireActivity())
+        val menuItem = menu.findItem(R.id.take_dream_photo)
+        menuItem.apply {
+            Log.d(TAG, "Camera available: $cameraAvailable")
+            isEnabled = cameraAvailable
+            isVisible = cameraAvailable
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.take_dream_photo -> {
+                val captureImageIntent =
+                    CameraUtil.createCaptureImageIntent(requireActivity(), photoUri)
+                startActivity(
+                    captureImageIntent
+                )
+                true
+            }
+            else -> return super.onOptionsItemSelected(item)
+        }
+    }
+
+    // =======================================================
+    // lifecycle functions
+    // - onCreate: initialize model fields (construct a dream for testing)
+    // - onCreateView: initialize view fields
+    // - onViewCreated: update the UI
+    // - onStart: define text listener and checkbox listeners
+    // =======================================================
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
         // initialize model fields
         dream = Dream()
         dreamEntries = listOf()
@@ -64,7 +114,7 @@ class DreamDetailFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        val view = inflater.inflate(R.layout.fragment_dream, container, false)
+        val view = inflater.inflate(R.layout.fragment_dream_detail, container, false)
         titleField = view.findViewById(R.id.dream_title) as EditText
         dreamButton0 = view.findViewById(R.id.dream_entry_0_button) as Button
         dreamButton1 = view.findViewById(R.id.dream_entry_1_button) as Button
@@ -74,9 +124,13 @@ class DreamDetailFragment : Fragment() {
         isRealizedCheckBox = view.findViewById(R.id.dream_realized) as CheckBox
         isDeferredCheckBox = view.findViewById(R.id.dream_deferred) as CheckBox
 
-        dreamButtonList = listOf(
+        entryButtons = listOf(
             dreamButton0, dreamButton1, dreamButton2, dreamButton3, dreamButton4
         )
+
+        addCommentButton = view.findViewById(R.id.add_comment_fab) as FloatingActionButton
+
+        photoView = view.findViewById(R.id.dream_photo) as ImageView
 
         return view
     }
@@ -94,6 +148,10 @@ class DreamDetailFragment : Fragment() {
                 dream?.let {
                     this.dream = dream.dream
                     this.dreamEntries = dream.dreamEntries
+                    photoFile = dreamDetailViewModel.getPhotoFile(dream)
+                    photoUri = FileProvider.getUriForFile(requireActivity(),
+                    "edu.vt.cs.cs5254.dreamcatcher.fileprovider",
+                    photoFile)
                     updateUI()
                 }
             })
@@ -128,6 +186,13 @@ class DreamDetailFragment : Fragment() {
             isRealizedCheckBox.isEnabled = !isDeferredCheckBox.isChecked
             updateUI()
         }
+        addCommentButton.setOnClickListener {
+            AddDreamEntryFragment().apply {
+                setTargetFragment(this@DreamDetailFragment, REQUEST_ADD_COMMENT)
+                show(this@DreamDetailFragment.parentFragmentManager, DIALOG_ADD_COMMENT)
+            }
+        }
+
     }
 
     override fun onStop() {
@@ -148,7 +213,16 @@ class DreamDetailFragment : Fragment() {
             jumpDrawablesToCurrentState()
         }
         updateEntryButtons()
+        updatePhotoView()
+    }
 
+    private fun updatePhotoView() {
+        if (photoFile.exists()) {
+            val bitmap = CameraUtil.getScaledBitmap(photoFile.path, requireActivity())
+            photoView.setImageBitmap(bitmap)
+        } else {
+            photoView.setImageDrawable(null)
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
@@ -163,7 +237,7 @@ class DreamDetailFragment : Fragment() {
             DateFormat.getMediumDateFormat(activity)
         val commentDate = df.format(dream.dateRevealed)
 
-        for ((dreamEntries, button) in dreamEntries.zip(dreamButtonList)) {
+        for ((dreamEntries, button) in dreamEntries.zip(entryButtons)) {
             button.visibility = View.VISIBLE
             if (dreamEntries.kind == DreamEntryKind.COMMENT) {
                 button.text = "${dreamEntries.comment} (${commentDate})"
@@ -224,6 +298,16 @@ class DreamDetailFragment : Fragment() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
+    override fun onCommentProvided(comment: String) {
+        val newEntry = DreamEntry(
+            dreamId = dream.id,
+            kind = DreamEntryKind.COMMENT,
+            comment = comment
+        )
+        dreamEntries = dreamEntries + newEntry
+        updateUI()
+    }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun setRevealedStyle(button: Button) {
@@ -258,8 +342,6 @@ class DreamDetailFragment : Fragment() {
                 arguments = args
             }
         }
-
-        //const val TAG = "DreamFragment"
 
         private const val REVEALED_COLOR = -0xff8946
         private const val REALIZED_COLOR = -0xff7100
