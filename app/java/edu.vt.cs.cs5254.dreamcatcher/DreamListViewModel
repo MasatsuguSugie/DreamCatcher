@@ -2,6 +2,7 @@ package edu.vt.cs.cs5254.dreamcatcher
 
 import androidx.lifecycle.ViewModel
 import edu.vt.cs.cs5254.dreamcatcher.database.Dream
+import edu.vt.cs.cs5254.dreamcatcher.database.DreamEntry
 
 class DreamListViewModel : ViewModel() {
 
@@ -10,6 +11,10 @@ class DreamListViewModel : ViewModel() {
 
     fun addDream(dream: Dream) {
         dreamRepository.addDream(dream)
+    }
+
+    fun addDreamEntry(dreamEntry: DreamEntry) {
+        dreamRepository.addDreamEntry(dreamEntry)
     }
 
 }
