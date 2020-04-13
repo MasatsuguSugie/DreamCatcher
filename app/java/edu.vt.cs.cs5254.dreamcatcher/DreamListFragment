@@ -4,17 +4,22 @@ import android.content.Context
 import android.os.Bundle
 import android.text.format.DateFormat
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.navigation.NavigationView
 import edu.vt.cs.cs5254.dreamcatcher.database.Dream
+import edu.vt.cs.cs5254.dreamcatcher.database.DreamEntry
+import edu.vt.cs.cs5254.dreamcatcher.database.DreamEntryKind
+import edu.vt.cs.cs5254.dreamcatcher.database.DreamWithEntries
 import java.util.*
 
 private const val TAG = "DreamListFragment"
@@ -23,7 +28,8 @@ class DreamListFragment : Fragment() {
 
     /**
      * Required interface for hosting activities
-     *//**
+     */
+    /**
      * ALL hosting activities must
      * implement this interface
      */
@@ -35,19 +41,28 @@ class DreamListFragment : Fragment() {
 
     //recycler-view/adaptor fields
     private lateinit var dreamRecyclerView: RecyclerView
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var navigationView: NavigationView
+
+    // model fields
+    private var allDreams: List<Dream> = emptyList()
 
     // controller fields
     private var adapter: DreamAdapter? = DreamAdapter(emptyList(), callbacks)
 
     //view-model
     private val dreamListViewModel by lazy {
-        val factory = DreamListViewModelFactory()
-        ViewModelProvider(this@DreamListFragment, factory).get(DreamListViewModel::class.java)
+        ViewModelProvider(this@DreamListFragment).get(DreamListViewModel::class.java)
     }
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
-        callbacks = context as Callbacks?
+        callbacks = context as? Callbacks
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
     }
 
     override fun onCreateView(
@@ -60,6 +75,10 @@ class DreamListFragment : Fragment() {
         dreamRecyclerView = view.findViewById(R.id.dream_recycler_view) as RecyclerView
         dreamRecyclerView.layoutManager = LinearLayoutManager(context)
         dreamRecyclerView.adapter = adapter
+
+        drawerLayout = view.findViewById(R.id.drawer_layout)
+        navigationView = view.findViewById(R.id.nav_view)
+
         return view
     }
 
@@ -70,9 +89,38 @@ class DreamListFragment : Fragment() {
             Observer { dreams ->
                 dreams?.let {
                     Log.i(TAG, "Got dreams ${dreams.size}")
+                    allDreams = dreams
                     updateUI(dreams)
                 }
-            })
+            }
+        )
+        navigationView.setNavigationItemSelectedListener { menuItem ->
+            menuItem.isChecked = true
+            val dreamFilter = when (menuItem.itemId) {
+                R.id.nav_all_dreams -> { dream: Dream -> true }
+                R.id.nav_active_dreams -> { dream: Dream -> !dream.isRealized && !dream.isDeferred }
+                R.id.nav_realized_dreams -> { dream: Dream -> dream.isRealized }
+                R.id.nav_deferred_dreams -> { dream: Dream -> dream.isDeferred }
+                else -> { dream: Dream -> false }
+            }
+            val dreamsToDisplay: List<Dream> = allDreams.filter { dream -> dreamFilter(dream) }
+            updateUI(dreamsToDisplay)
+            drawerLayout.closeDrawer(GravityCompat.START)
+            true
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        dreamListViewModel.dreamListLiveData.observe(
+            viewLifecycleOwner,
+            Observer { dreams ->
+                dreams?.let {
+                    Log.i(TAG, "Got dreamLiveData ${dreams.size}")
+                    updateUI(dreams)
+                }
+            }
+        )
     }
 
     override fun onDetach() {
@@ -80,36 +128,41 @@ class DreamListFragment : Fragment() {
         callbacks = null
     }
 
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        super.onCreateOptionsMenu(menu, inflater)
+        inflater.inflate(R.menu.fragment_dream_list, menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.new_dream -> {
+                val dream = Dream()
+                val revealedEntry = DreamEntry(comment = "Dream Revealed",
+                    kind = DreamEntryKind.REVEALED,
+                    dreamId = dream.id)
+                dreamListViewModel.addDream(dream)
+                dreamListViewModel.addDreamEntry(revealedEntry)
+                callbacks?.onDreamSelected(dream.id)
+                true
+            }
+            else -> return super.onOptionsItemSelected(item)
+        }
+    }
+
+    // =================================================
+    // updateUI function
+    // - updates the dream-list from the model
+    // - creates a new dream adapter and
+    // assigns it to the recycler-view
+    // ================================================
+
     private fun updateUI(dreams: List<Dream>) {
         adapter = DreamAdapter(dreams, callbacks)
         dreamRecyclerView.adapter = adapter
     }
 
-    companion object {
-        fun newInstance(): DreamListFragment {
-            return DreamListFragment()
-        }
-    }
-
-    private inner class DreamAdapter(var dreams: List<Dream>, val callbacks: Callbacks?): RecyclerView.Adapter<DreamHolder>() {
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int):DreamHolder {
-            val inflater = LayoutInflater.from(parent.context)
-            val view =
-                inflater.inflate(R.layout.list_item_dream, parent, false)
-            Log.d(TAG, "onCreateViewHolder")
-            return DreamHolder(view, callbacks)
-        }
-
-        override fun getItemCount() = dreams.size
-
-        override fun onBindViewHolder(holder: DreamHolder, position: Int) {
-            val dream = dreams[position]
-            holder.bind(dream)
-        }
-    }
-
-    inner class DreamHolder(view: View, val callbacks: Callbacks?) : RecyclerView.ViewHolder(view), View.OnClickListener {
+    inner class DreamHolder(view: View, val callbacks: Callbacks?) : RecyclerView.ViewHolder(view),
+        View.OnClickListener {
 
         //model fields
         private lateinit var dream: Dream
@@ -122,9 +175,20 @@ class DreamListFragment : Fragment() {
         // date
         private val dateFormat = DateFormat.getMediumDateFormat(this@DreamHolder.itemView.context)
 
+        // =================================================
+        // Initializer block for the primary constructor
+        // https://kotlinlang.org/docs/reference/classes.html
+        // =================================================
+
         init {
             itemView.setOnClickListener(this)
         }
+
+        // ===============================================
+        // DreamAdapter's onBindViewHolder function calls
+        // through to bind, which does all the work of binding
+        // the view-holder to the dream
+        // ===============================================
 
         fun bind(dream: Dream) {
             this.dream = dream
@@ -146,8 +210,52 @@ class DreamListFragment : Fragment() {
             }
         }
 
+        // ==============================================
+        // This view-holder is an onCLickListener, so it must
+        // implement this function; it invokes the function
+        // onDreamSelected, which is implemented by DreamActivity
+        // ==============================================
+
         override fun onClick(v: View?) {
             callbacks?.onDreamSelected(dream.id)
+        }
+    }
+
+    // =========================================================
+    // DreamAdapter - inner class for the recycler-view
+    // =========================================================
+
+    // Do not make this private without making DreamHolder private
+    internal inner class DreamAdapter(var dreams: List<Dream>, val callbacks: Callbacks?) :
+        RecyclerView.Adapter<DreamHolder>() {
+
+        // =============================================================
+        // Functions that all DreamAdapters must override
+        // - onCreateViewHolder: inflates the view and uses it
+        //   to create a new view-holder
+        // - getItemCount: returns the number of dreams in the model
+        // - onBindViewHolder: call through to DreamHolder's bind function
+        // =============================================================
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DreamHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            val view =
+                inflater.inflate(R.layout.list_item_dream, parent, false)
+            Log.d(TAG, "onCreateViewHolder")
+            return DreamHolder(view, callbacks)
+        }
+
+        override fun getItemCount() = dreams.size
+
+        override fun onBindViewHolder(holder: DreamHolder, position: Int) {
+            val dream = dreams[position]
+            holder.bind(dream)
+        }
+    }
+
+    companion object {
+        fun newInstance(): DreamListFragment {
+            return DreamListFragment()
         }
     }
 }
