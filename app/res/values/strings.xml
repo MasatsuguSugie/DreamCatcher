@@ -10,5 +10,13 @@
     <string name="dream_entry_2_button">DREAM ENTRY 2</string>
     <string name="dream_entry_3_button">DREAM ENTRY 3</string>
     <string name="dream_entry_4_button">DREAM REALIZED/DEFERRED</string>
-    <string name="dream_entry_5_button">DREAM REALIZED</string>
+    <string name="new_dream">New Dream</string>
+    <string name="take_dream_photo">Take Dream Photo</string>
+    <string name="share_dream">Share Dream</string>
+    <string name="share_dream_text">%1$s, %2$s, %3$s, and %4$s</string>
+    <string name="all_dreams">All Dreams</string>
+    <string name="active_dreams">Active Dreams</string>
+    <string name="realized_dreams">Realized Dreams</string>
+    <string name="deferred_dreams">Deferred Dreams</string>
+    <string name="menu">Menu</string>
 </resources>
