@@ -1,5 +1,6 @@
 package edu.vt.cs.cs5254.dreamcatcher
 
+import android.content.Intent
 import android.graphics.BlendMode
 import android.graphics.BlendModeColorFilter
 import android.graphics.Color
@@ -11,15 +12,15 @@ import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.util.Log
 import android.view.*
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.ImageView
+import android.widget.*
 import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import edu.vt.cs.cs5254.dreamcatcher.database.*
 import edu.vt.cs.cs5254.dreamcatcher.util.CameraUtil
@@ -43,16 +44,13 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
     private lateinit var photoUri: Uri
 
     private lateinit var titleField: EditText
-    private lateinit var dreamButton0: Button
-    private lateinit var dreamButton1: Button
-    private lateinit var dreamButton2: Button
-    private lateinit var dreamButton3: Button
-    private lateinit var dreamButton4: Button
+
+    private lateinit var dreamEntryRecyclerView: RecyclerView
+
+    private var adapter: DreamEntryAdapter? = DreamEntryAdapter(emptyList())
 
     private lateinit var isRealizedCheckBox: CheckBox
     private lateinit var isDeferredCheckBox: CheckBox
-
-    private lateinit var entryButtons: List<Button>
 
     private lateinit var addCommentButton: FloatingActionButton
 
@@ -63,31 +61,23 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
         ViewModelProvider(this@DreamDetailFragment).get(DreamDetailViewModel::class.java)
     }
 
-    // options menu methods
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        super.onCreateOptionsMenu(menu, inflater)
-        inflater.inflate(R.menu.fragment_dream_detail, menu)
+    inner class SwipeToDeleteCallBack() :
+        ItemTouchHelper.SimpleCallback(
+            0,
+            ItemTouchHelper.LEFT
+        ) {
 
-        val cameraAvailable = CameraUtil.isCameraAvailable(requireActivity())
-        val menuItem = menu.findItem(R.id.take_dream_photo)
-        menuItem.apply {
-            Log.d(TAG, "Camera available: $cameraAvailable")
-            isEnabled = cameraAvailable
-            isVisible = cameraAvailable
+        override fun onMove(
+            recyclerView: RecyclerView,
+            viewHolder: RecyclerView.ViewHolder,
+            target: RecyclerView.ViewHolder
+        ): Boolean {
+            return false
         }
-    }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.take_dream_photo -> {
-                val captureImageIntent =
-                    CameraUtil.createCaptureImageIntent(requireActivity(), photoUri)
-                startActivity(
-                    captureImageIntent
-                )
-                true
-            }
-            else -> return super.onOptionsItemSelected(item)
+        override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+            val position = viewHolder.adapterPosition
+            adapter?.deleteItem(position)
         }
     }
 
@@ -114,23 +104,24 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        Log.d(TAG, "onCreateView")
         val view = inflater.inflate(R.layout.fragment_dream_detail, container, false)
+
+        dreamEntryRecyclerView =
+            view.findViewById(R.id.dream_entry_recycler_view) as RecyclerView
+        dreamEntryRecyclerView.layoutManager = LinearLayoutManager(context)
+        dreamEntryRecyclerView.adapter = adapter
+
         titleField = view.findViewById(R.id.dream_title) as EditText
-        dreamButton0 = view.findViewById(R.id.dream_entry_0_button) as Button
-        dreamButton1 = view.findViewById(R.id.dream_entry_1_button) as Button
-        dreamButton2 = view.findViewById(R.id.dream_entry_2_button) as Button
-        dreamButton3 = view.findViewById(R.id.dream_entry_3_button) as Button
-        dreamButton4 = view.findViewById(R.id.dream_entry_4_button) as Button
         isRealizedCheckBox = view.findViewById(R.id.dream_realized) as CheckBox
         isDeferredCheckBox = view.findViewById(R.id.dream_deferred) as CheckBox
-
-        entryButtons = listOf(
-            dreamButton0, dreamButton1, dreamButton2, dreamButton3, dreamButton4
-        )
 
         addCommentButton = view.findViewById(R.id.add_comment_fab) as FloatingActionButton
 
         photoView = view.findViewById(R.id.dream_photo) as ImageView
+
+        val itemTouchHelper = ItemTouchHelper(SwipeToDeleteCallBack())
+        itemTouchHelper.attachToRecyclerView(dreamEntryRecyclerView)
 
         return view
     }
@@ -142,6 +133,7 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
             TAG,
             "onViewCreated establishing observer from DreamDetailViewModel.dream to DreamFragment"
         )
+
         dreamDetailViewModel.dreamLiveData.observe(
             viewLifecycleOwner,
             Observer { dream ->
@@ -149,9 +141,11 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
                     this.dream = dream.dream
                     this.dreamEntries = dream.dreamEntries
                     photoFile = dreamDetailViewModel.getPhotoFile(dream)
-                    photoUri = FileProvider.getUriForFile(requireActivity(),
-                    "edu.vt.cs.cs5254.dreamcatcher.fileprovider",
-                    photoFile)
+                    photoUri = FileProvider.getUriForFile(
+                        requireActivity(),
+                        "edu.vt.cs.cs5254.dreamcatcher.fileprovider",
+                        photoFile
+                    )
                     updateUI()
                 }
             })
@@ -212,8 +206,58 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
             isChecked = dream.isDeferred
             jumpDrawablesToCurrentState()
         }
-        updateEntryButtons()
+
+        adapter = DreamEntryAdapter(dreamEntries)
+        dreamEntryRecyclerView.adapter = adapter
+
         updatePhotoView()
+    }
+
+    // options menu methods
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        super.onCreateOptionsMenu(menu, inflater)
+        inflater.inflate(R.menu.fragment_dream_detail, menu)
+
+        val cameraAvailable = CameraUtil.isCameraAvailable(requireActivity())
+        val menuItem = menu.findItem(R.id.take_dream_photo)
+        menuItem.apply {
+            Log.d(TAG, "Camera available: $cameraAvailable")
+            isEnabled = cameraAvailable
+            isVisible = cameraAvailable
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == R.id.take_dream_photo) {
+            val captureImageIntent =
+                CameraUtil.createCaptureImageIntent(requireActivity(), photoUri)
+            startActivity(
+                captureImageIntent
+            )
+            return true
+        }
+        if (item.itemId == R.id.share_dream) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, getDreamReport())
+            }.also { intent ->
+                startActivity(intent)
+                return true
+            }
+        } else {
+            return super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun getDreamReport(): String {
+        val newline = System.getProperty("line.separator")
+        val sb = StringBuilder()
+        sb.append("# ${dream.description} $newline")
+        for (e in dreamEntries) {
+            val df = DateFormat.getMediumDateFormat(activity)
+            sb.append("${e.comment} (${df.format(e.dateCreated)}) $newline")
+        }
+        return sb.toString()
     }
 
     private fun updatePhotoView() {
@@ -226,34 +270,31 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun updateEntryButtons() {
-        dreamButton0.visibility = View.GONE
-        dreamButton1.visibility = View.GONE
-        dreamButton2.visibility = View.GONE
-        dreamButton3.visibility = View.GONE
-        dreamButton4.visibility = View.GONE
-
+    private fun updateEntryButton(button: Button, entry: DreamEntry) {
+//        button.visibility = View.GONE
         val df =
             DateFormat.getMediumDateFormat(activity)
         val commentDate = df.format(dream.dateRevealed)
-
-        for ((dreamEntries, button) in dreamEntries.zip(entryButtons)) {
-            button.visibility = View.VISIBLE
-            if (dreamEntries.kind == DreamEntryKind.COMMENT) {
-                button.text = "${dreamEntries.comment} (${commentDate})"
-                setCommentStyle(button)
-            }
-            if (dreamEntries.kind == DreamEntryKind.REVEALED) {
-                button.text = dreamEntries.comment
+        when (entry.kind) {
+            DreamEntryKind.REVEALED -> {
+                button.visibility = View.VISIBLE
+                button.text = entry.comment
                 setRevealedStyle(button)
             }
-            if (dreamEntries.kind == DreamEntryKind.DEFERRED) {
-                button.text = dreamEntries.comment
+            DreamEntryKind.REALIZED -> {
+                button.visibility = View.VISIBLE
+                button.text = entry.comment
+                setRealizedStyle(button)
+            }
+            DreamEntryKind.DEFERRED -> {
+                button.visibility = View.VISIBLE
+                button.text = entry.comment
                 setDeferredStyle(button)
             }
-            if (dreamEntries.kind == DreamEntryKind.REALIZED) {
-                button.text = dreamEntries.comment
-                setRealizedStyle(button)
+            DreamEntryKind.COMMENT -> {
+                button.visibility = View.VISIBLE
+                button.text = "${entry.comment} (${commentDate})"
+                setCommentStyle(button)
             }
         }
     }
@@ -300,13 +341,61 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun onCommentProvided(comment: String) {
-        val newEntry = DreamEntry(
-            dreamId = dream.id,
-            kind = DreamEntryKind.COMMENT,
-            comment = comment
-        )
-        dreamEntries = dreamEntries + newEntry
+        if (!dream.isRealized) {
+            val newEntry = DreamEntry(
+                dreamId = dream.id,
+                kind = DreamEntryKind.COMMENT,
+                comment = comment
+            )
+            dreamEntries = dreamEntries + newEntry
+        }
         updateUI()
+    }
+
+    private inner class DreamEntryHolder(view: View) : RecyclerView.ViewHolder(view) {
+
+        //model fields
+        private lateinit var dreamEntry: DreamEntry
+
+        //view fields
+        val dreamEntryButton: Button = itemView.findViewById(R.id.dream_entry_button)
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        fun bind(dreamEntry: DreamEntry) {
+            this.dreamEntry = dreamEntry
+            updateEntryButton(dreamEntryButton, dreamEntry)
+        }
+
+    }
+
+    private inner class DreamEntryAdapter(var dreamEntries: List<DreamEntry>) : RecyclerView.Adapter<DreamEntryHolder>() {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DreamEntryHolder {
+            val view = layoutInflater.inflate(R.layout.list_item_dream_entry, parent, false)
+            return DreamEntryHolder(view)
+        }
+
+        override fun getItemCount() = dreamEntries.size
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        override fun onBindViewHolder(holder: DreamEntryHolder, position: Int) {
+            val dreamEntries = dreamEntries[position]
+            holder.bind(dreamEntries)
+        }
+
+        fun deleteItem(position: Int) {
+            if (dreamEntries[position].kind === DreamEntryKind.COMMENT) {
+                val dreamEntryToDelete = dreamEntries[position]
+                dreamEntries = dreamEntries - dreamEntryToDelete
+                updateDreamEntries(dreamEntries)
+                notifyItemRemoved(position)
+            }
+        }
+    }
+
+    private fun updateDreamEntries(newDreamEntries: List<DreamEntry>) {
+        this.dreamEntries = newDreamEntries
+        adapter?.dreamEntries = newDreamEntries
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
