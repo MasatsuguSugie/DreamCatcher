@@ -2,11 +2,7 @@ package edu.vt.cs.cs5254.dreamcatcher
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import edu.vt.cs.cs5254.dreamcatcher.DreamListFragment.Companion.newInstance
-import java.lang.reflect.Array.newInstance
-import java.net.URLClassLoader.newInstance
 import java.util.*
-import javax.xml.datatype.DatatypeFactory.newInstance
 
 private const val TAG = "MainActivity"
 class DreamActivity : AppCompatActivity(), DreamListFragment.Callbacks {
@@ -29,7 +25,7 @@ class DreamActivity : AppCompatActivity(), DreamListFragment.Callbacks {
     }
 
     override fun onDreamSelected(dreamId: UUID) {
-        val fragment = DreamFragment.newInstance(dreamId)
+        val fragment = DreamDetailFragment.newInstance(dreamId)
         supportFragmentManager
             .beginTransaction()
             .replace(R.id.fragment_container, fragment)
