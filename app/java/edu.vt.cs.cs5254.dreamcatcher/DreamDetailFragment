@@ -228,24 +228,25 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == R.id.take_dream_photo) {
-            val captureImageIntent =
-                CameraUtil.createCaptureImageIntent(requireActivity(), photoUri)
-            startActivity(
-                captureImageIntent
-            )
-            return true
-        }
-        if (item.itemId == R.id.share_dream) {
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, getDreamReport())
-            }.also { intent ->
-                startActivity(intent)
-                return true
+        return when (item.itemId) {
+            R.id.take_dream_photo -> {
+                val captureImageIntent =
+                    CameraUtil.createCaptureImageIntent(requireActivity(), photoUri)
+                startActivity(captureImageIntent)
+                true
             }
-        } else {
-            return super.onOptionsItemSelected(item)
+            R.id.share_dream -> {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, getDreamReport())
+                    putExtra(Intent.EXTRA_SUBJECT, dream.description)
+
+                }.also { intent ->
+                    startActivity(Intent.createChooser(intent, getString(R.string.send_report)))
+                }
+                true
+            }
+            else -> return super.onOptionsItemSelected(item)
         }
     }
 
@@ -368,7 +369,8 @@ class DreamDetailFragment : Fragment(), AddDreamEntryFragment.Callbacks {
 
     }
 
-    private inner class DreamEntryAdapter(var dreamEntries: List<DreamEntry>) : RecyclerView.Adapter<DreamEntryHolder>() {
+    private inner class DreamEntryAdapter(var dreamEntries: List<DreamEntry>) :
+        RecyclerView.Adapter<DreamEntryHolder>() {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): DreamEntryHolder {
             val view = layoutInflater.inflate(R.layout.list_item_dream_entry, parent, false)
